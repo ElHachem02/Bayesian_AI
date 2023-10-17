@@ -31,6 +31,7 @@ class Model(object):
         self.rng = np.random.default_rng(seed=0)
 
         # TODO: Add custom initialization for your model here if necessary
+        
 
     def make_predictions(self, test_x_2D: np.ndarray, test_x_AREA: np.ndarray) -> typing.Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
@@ -59,7 +60,62 @@ class Model(object):
         """
 
         # TODO: Fit your model here
-        pass
+
+        # Start by finding the best kernel
+        best_kernel = self.finetuning_kernel(train_y, train_x_2D)
+
+        # No need to choose the best hyperparameter since it is done by sklearn
+        gp = GaussianProcessRegressor(kernel=best_kernel, 
+                                      normalize_y=True, # Common convention for the prior to have mean 0
+                                      random_state=42)
+        
+        # Fit and store the gp
+        self.gp = gp.fit(train_x_2D, train_y)
+        
+
+    def finetuning_kernel(self, train_y: np.ndarray,train_x_2D: np.ndarray):
+        """
+        Find the right kernel and its hyperparameters that model the data faithfully.
+        :param train_x_2D: Training features as a 2d NumPy float array of shape (NUM_SAMPLES, 2)
+        :param train_y: Training pollution concentrations as a 1d NumPy float array of shape (NUM_SAMPLES,)
+        """
+
+        # List of possible kernels
+        kernel_list = [
+            RBF(),
+            Matern(),
+            RationalQuadratic(),
+            ExpSineSquared(),
+            WhiteKernel(),
+            DotProduct(),
+            RBF() + WhiteKernel(),
+            Matern() + WhiteKernel(),
+        ]
+
+        best_likelihood = float("-inf")
+        best_kernel = None
+
+        for kernel in kernel_list:
+            print("Testing for kernel:", kernel)
+            gp = GaussianProcessRegressor(kernel=kernel, 
+                                          optimizer="fmin_l_bfgs_b", # Optimizer for choosing the hyperparameter of the kernel
+                                          normalize_y=True, # Common convention for the prior to have mean 0
+                                          n_restarts_optimizer=2,
+                                          random_state=42)
+        
+            gp.fit(train_x_2D, train_y)
+
+            likelihood = gp.log_marginal_likelihood_value_
+            print("Marginal Likelihood:", likelihood)
+
+            # Check if it is the highest likelihood so far
+            if likelihood > best_likelihood:
+                best_likelihood = likelihood
+                best_kernel = gp.kernel_
+
+        return best_kernel
+
+
 
 # You don't have to change this function
 def cost_function(ground_truth: np.ndarray, predictions: np.ndarray, AREA_idxs: np.ndarray) -> float:
