@@ -100,7 +100,7 @@ class Model(object):
             print("Testing for kernel:", kernel)
             gp = GaussianProcessRegressor(kernel=kernel, 
                                           normalize_y=True, # Common convention for the prior to have mean 0
-                                          n_restarts_optimizer=5,
+                                          n_restarts_optimizer=10,
                                           random_state=42)
         
             gp.fit(train_x_2D, train_y)
