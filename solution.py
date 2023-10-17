@@ -64,9 +64,10 @@ class Model(object):
         # Start by finding the best kernel
         best_kernel = self.finetuning_kernel(train_y, train_x_2D)
 
-        # No need to choose the best hyperparameter since it is done by sklearn
+        # Try to improve the likelihood for the best kernel obtained
         gp = GaussianProcessRegressor(kernel=best_kernel, 
                                       normalize_y=True, # Common convention for the prior to have mean 0
+                                      n_restarts_optimizer=5,
                                       random_state=42)
         
         # Fit and store the gp
@@ -98,9 +99,8 @@ class Model(object):
         for kernel in kernel_list:
             print("Testing for kernel:", kernel)
             gp = GaussianProcessRegressor(kernel=kernel, 
-                                          optimizer="fmin_l_bfgs_b", # Optimizer for choosing the hyperparameter of the kernel
                                           normalize_y=True, # Common convention for the prior to have mean 0
-                                          n_restarts_optimizer=2,
+                                          n_restarts_optimizer=5,
                                           random_state=42)
         
             gp.fit(train_x_2D, train_y)
