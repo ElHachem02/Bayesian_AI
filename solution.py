@@ -62,17 +62,20 @@ class Model(object):
         # TODO: Fit your model here
 
         # Start by finding the best kernel
-        best_kernel = self.finetuning_kernel(train_y, train_x_2D)
+        # best_kernel = finetuning_kernel(train_y, train_x_2D)
+
+        # Result of finetuning:
+        best_kernel = Matern(length_scale=0.0548, nu=1.5, length_scale_bounds="fixed") + WhiteKernel(noise_level=0.00534)
 
         # Try to improve the likelihood for the best kernel obtained
         gp = GaussianProcessRegressor(kernel=best_kernel, 
                                       normalize_y=True, # Common convention for the prior to have mean 0
-                                      n_restarts_optimizer=5,
+                                      n_restarts_optimizer=0, # Finetune already done
                                       random_state=42)
-        
+                
         # Fit and store the gp
         self.gp = gp.fit(train_x_2D, train_y)
-        
+
 
     def finetuning_kernel(self, train_y: np.ndarray,train_x_2D: np.ndarray):
         """
@@ -83,14 +86,11 @@ class Model(object):
 
         # List of possible kernels
         kernel_list = [
-            RBF(),
-            Matern(),
-            RationalQuadratic(),
-            ExpSineSquared(),
-            WhiteKernel(),
-            DotProduct(),
             RBF() + WhiteKernel(),
             Matern() + WhiteKernel(),
+            RationalQuadratic() + WhiteKernel(),
+            ExpSineSquared() + WhiteKernel(),
+            DotProduct() + WhiteKernel(),
         ]
 
         best_likelihood = float("-inf")
@@ -113,8 +113,8 @@ class Model(object):
                 best_likelihood = likelihood
                 best_kernel = gp.kernel_
 
+        self.best_kernel = best_kernel
         return best_kernel
-
 
 
 # You don't have to change this function
