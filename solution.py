@@ -65,10 +65,11 @@ class Model(object):
         # best_kernel = finetuning_kernel(train_y, train_x_2D)
 
         # Result of finetuning:
-        best_kernel = Matern(length_scale=0.0548, nu=1.5, length_scale_bounds="fixed") + WhiteKernel(noise_level=0.00534)
+        best_kernel = Matern(length_scale=0.0548, nu=1.5) + WhiteKernel(noise_level=0.00534)
 
         # Try to improve the likelihood for the best kernel obtained
         gp = GaussianProcessRegressor(kernel=best_kernel, 
+                                      optimizer=None,
                                       normalize_y=True, # Common convention for the prior to have mean 0
                                       n_restarts_optimizer=0, # Finetune already done
                                       random_state=42)
