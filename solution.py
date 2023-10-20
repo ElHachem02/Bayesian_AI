@@ -66,9 +66,6 @@ class Model(object):
         #data preprocessing
         reducedData = undersampleCluster(train_x_2D, train_y, samplePercentage=0.8, nbClusters=4)
 
-
-
-
         # Start by finding the best kernel
         # best_kernel = finetuning_kernel(train_y, train_x_2D)
 
@@ -256,23 +253,27 @@ def extract_city_area_information(train_x: np.ndarray, test_x: np.ndarray) -> ty
 
     return train_x_2D, train_x_AREA, test_x_2D, test_x_AREA
 
-#-------------Auxiliary-functions------------------------------------
+#---------------------------------------------------Auxiliary-functions------------------------------------------------------------------------------
 
 def undersampleCluster(train_x_2D: np.ndarray, train_y: np.ndarray, samplePercentage: int, nbClusters: int) -> pd.DataFrame:
-    train_x_2D = pd.DataFrame(train_x_2D, columns=['lon', 'lat'])
-    train_y = pd.Series(train_y, name='pm25')
-
+    
     data = pd.concat([train_x_2D, train_y], axis=1)
-    kmeans = KMeans(n_clusters=nbClusters, init='k-means++', random_state=42)
+
+    # Define the model with the explicit n_init value
+    kmeans = KMeans(n_clusters=nbClusters, init='k-means++', random_state=42, n_init=10)
     data['Cluster'] = kmeans.fit_predict(train_x_2D)
 
-    reducedData = pd.DataFrame(columns=data.columns)
+    reducedData = []
+
     for _, v in data.groupby('Cluster'):
         sampleSize = int(samplePercentage * v.shape[0])
         reducedCluster = v.sample(sampleSize, random_state=42)
-        reducedData = pd.concat([reducedData, reducedCluster], axis=0)
 
-    return reducedData.drop('Cluster', axis=1)
+        # Avoid concatenating empty or all-NA DataFrames if possible
+        if not reducedCluster.empty and not reducedCluster.isnull().all().all():
+            reducedData.append(reducedCluster)
+
+    return reducedData
 
 
 # you don't have to change this function
