@@ -47,11 +47,11 @@ class Model(object):
         """
 
         # TODO: Use your GP to estimate the posterior mean and stddev for each city_area here
-        gp_mean = np.zeros(test_x_2D.shape[0], dtype=float)
-        gp_std = np.zeros(test_x_2D.shape[0], dtype=float)
+        gp_mean, gp_std = self.gp.predict(test_x_2D, return_std=True)
 
         # TODO: Use the GP posterior to form your predictions here
-        predictions = gp_mean
+        k = 1
+        predictions = gp_mean + test_x_AREA * k * gp_std
 
         return predictions, gp_mean, gp_std
     
@@ -64,7 +64,7 @@ class Model(object):
 
         # TODO: Fit your model here
         #data preprocessing
-        reducedData = undersampleCluster(train_x_2D, train_y, samplePercentage=0.8, nbClusters=4)
+        train_x_2D_reduced, train_y_reduced = undersampleCluster(train_x_2D, train_y, samplePercentage=0.6, nbClusters=4)
 
         # Start by finding the best kernel
         # best_kernel = finetuning_kernel(train_y, train_x_2D)
@@ -74,13 +74,13 @@ class Model(object):
 
         # Try to improve the likelihood for the best kernel obtained
         gp = GaussianProcessRegressor(kernel=best_kernel, 
-                                      optimizer=None,
+                                      optimizer=None, # Finetune already done
                                       normalize_y=True, # Common convention for the prior to have mean 0
-                                      n_restarts_optimizer=0, # Finetune already done
+                                      n_restarts_optimizer=5, 
                                       random_state=42)
                 
         # Fit and store the gp
-        self.gp = gp.fit(train_x_2D, train_y)
+        self.gp = gp.fit(train_x_2D_reduced, train_y_reduced)
 
 
     def finetuning_kernel(self, train_y: np.ndarray,train_x_2D: np.ndarray):
@@ -121,7 +121,7 @@ class Model(object):
 
         self.best_kernel = best_kernel
         return best_kernel
-
+    
 
 # You don't have to change this function
 def cost_function(ground_truth: np.ndarray, predictions: np.ndarray, AREA_idxs: np.ndarray) -> float:
@@ -263,17 +263,22 @@ def undersampleCluster(train_x_2D: np.ndarray, train_y: np.ndarray, samplePercen
     kmeans = KMeans(n_clusters=nbClusters, init='k-means++', random_state=42, n_init=10)
     data['Cluster'] = kmeans.fit_predict(train_x_2D)
 
-    reducedData = []
+    clustered_data = []
 
     for _, v in data.groupby('Cluster'):
         sampleSize = int(samplePercentage * v.shape[0])
-        reducedCluster = v.sample(sampleSize, random_state=42)
+        reduced_cluster = v.sample(sampleSize, random_state=42)
 
         # Avoid concatenating empty or all-NA DataFrames if possible
-        if not reducedCluster.empty and not reducedCluster.isnull().all().all():
-            reducedData.append(reducedCluster)
+        if not reduced_cluster.empty and not reduced_cluster.isnull().all().all():
+            clustered_data.append(reduced_cluster.drop('Cluster', axis=1))
 
-    return reducedData
+    reduced_df = pd.concat(clustered_data, ignore_index=True)
+
+    train_x_2D_reduced = reduced_df.drop("pm25", axis=1)
+    train_y_reduced = reduced_df["pm25"]
+
+    return train_x_2D_reduced, train_y_reduced
 
 
 # you don't have to change this function
