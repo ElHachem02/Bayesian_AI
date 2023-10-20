@@ -5,6 +5,9 @@ import numpy as np
 from sklearn.gaussian_process import GaussianProcessRegressor
 import matplotlib.pyplot as plt
 from matplotlib import cm
+from sklearn.cluster import KMeans
+import pandas as pd
+
 
 
 # Set `EXTENDED_EVALUATION` to `True` in order to visualize your predictions.
@@ -51,7 +54,7 @@ class Model(object):
         predictions = gp_mean
 
         return predictions, gp_mean, gp_std
-
+    
     def fitting_model(self, train_y: np.ndarray,train_x_2D: np.ndarray):
         """
         Fit your model on the given training data.
@@ -60,6 +63,11 @@ class Model(object):
         """
 
         # TODO: Fit your model here
+        #data preprocessing
+        reducedData = undersampleCluster(train_x_2D, train_y, samplePercentage=0.8, nbClusters=4)
+
+
+
 
         # Start by finding the best kernel
         # best_kernel = finetuning_kernel(train_y, train_x_2D)
@@ -242,6 +250,25 @@ def extract_city_area_information(train_x: np.ndarray, test_x: np.ndarray) -> ty
 
     return train_x_2D, train_x_AREA, test_x_2D, test_x_AREA
 
+#-------------Auxiliary-functions------------------------------------
+
+def undersampleCluster(train_x_2D: np.ndarray, train_y: np.ndarray, samplePercentage: int, nbClusters: int) -> pd.DataFrame:
+    train_x_2D = pd.DataFrame(train_x_2D, columns=['lon', 'lat'])
+    train_y = pd.Series(train_y, name='pm25')
+
+    data = pd.concat([train_x_2D, train_y], axis=1)
+    kmeans = KMeans(n_clusters=nbClusters, init='k-means++', random_state=42)
+    data['Cluster'] = kmeans.fit_predict(train_x_2D)
+
+    reducedData = pd.DataFrame(columns=data.columns)
+    for _, v in data.groupby('Cluster'):
+        sampleSize = int(samplePercentage * v.shape[0])
+        reducedCluster = v.sample(sampleSize, random_state=42)
+        reducedData = pd.concat([reducedData, reducedCluster], axis=0)
+
+    return reducedData.drop('Cluster', axis=1)
+
+
 # you don't have to change this function
 def main():
     # Load the training dateset and test features
@@ -251,6 +278,7 @@ def main():
 
     # Extract the city_area information
     train_x_2D, train_x_AREA, test_x_2D, test_x_AREA = extract_city_area_information(train_x, test_x)
+
     # Fit the model
     print('Fitting model')
     model = Model()
