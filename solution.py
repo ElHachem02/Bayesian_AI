@@ -243,6 +243,12 @@ def extract_city_area_information(train_x: np.ndarray, test_x: np.ndarray) -> ty
     test_x_AREA = np.zeros((test_x.shape[0],), dtype=bool)
 
     #TODO: Extract the city_area information from the training and test features
+    train_x_2D = train_x[:, :2]  # Extracting longitude and latitude
+    train_x_AREA = train_x[:, 2].astype(bool)  # Extracting area_id
+
+    # Doing the same for testing data
+    test_x_2D = test_x[:, :2]
+    test_x_AREA = test_x[:, 2].astype(bool)
 
     assert train_x_2D.shape[0] == train_x_AREA.shape[0] and test_x_2D.shape[0] == test_x_AREA.shape[0]
     assert train_x_2D.shape[1] == 2 and test_x_2D.shape[1] == 2
