@@ -64,7 +64,7 @@ class Model(object):
 
         # TODO: Fit your model here
         #data preprocessing
-        train_x_2D_reduced, train_y_reduced = undersampleCluster(train_x_2D, train_y, samplePercentage=0.6, nbClusters=4)
+        train_x_2D_reduced, train_y_reduced = under_sample_cluster(train_x_2D, train_y, samplePercentage=0.6, nbClusters=4)
 
         # Start by finding the best kernel
         # best_kernel = finetuning_kernel(train_y, train_x_2D)
@@ -255,9 +255,14 @@ def extract_city_area_information(train_x: np.ndarray, test_x: np.ndarray) -> ty
 
 #---------------------------------------------------Auxiliary-functions------------------------------------------------------------------------------
 
-def undersampleCluster(train_x_2D: np.ndarray, train_y: np.ndarray, samplePercentage: int, nbClusters: int) -> pd.DataFrame:
+def under_sample_cluster(train_x_2D: np.ndarray, train_y: np.ndarray, samplePercentage: int, nbClusters: int) -> pd.DataFrame:
+    """
     
-    data = pd.concat([train_x_2D, train_y], axis=1)
+    """
+    
+    # Build the data frame
+    data = pd.concat([pd.DataFrame(train_x_2D), pd.DataFrame(train_y)], axis=1)
+    data.columns = ["lon", "lat", "pm25"]
 
     # Define the model with the explicit n_init value
     kmeans = KMeans(n_clusters=nbClusters, init='k-means++', random_state=42, n_init=10)
@@ -275,8 +280,8 @@ def undersampleCluster(train_x_2D: np.ndarray, train_y: np.ndarray, samplePercen
 
     reduced_df = pd.concat(clustered_data, ignore_index=True)
 
-    train_x_2D_reduced = reduced_df.drop("pm25", axis=1)
-    train_y_reduced = reduced_df["pm25"]
+    train_x_2D_reduced = reduced_df.drop("pm25", axis=1).values
+    train_y_reduced = reduced_df["pm25"].values
 
     return train_x_2D_reduced, train_y_reduced
 
