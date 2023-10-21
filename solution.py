@@ -50,7 +50,7 @@ class Model(object):
         gp_mean, gp_std = self.gp.predict(test_x_2D, return_std=True)
 
         # TODO: Use the GP posterior to form your predictions here
-        k = 1
+        k = 1 # Found after tuning on my validation data from training data
         predictions = gp_mean + test_x_AREA * k * gp_std
 
         return predictions, gp_mean, gp_std
@@ -63,11 +63,15 @@ class Model(object):
         """
 
         # TODO: Fit your model here
-        #data preprocessing
-        train_x_2D_reduced, train_y_reduced = under_sample_cluster(train_x_2D, train_y, samplePercentage=0.6, nbClusters=4)
+        fine_tuning = False
 
-        # Start by finding the best kernel
-        # best_kernel = finetuning_kernel(train_y, train_x_2D)
+        # If we didn't fine tune the model
+        if fine_tuning:
+            # data preprocessing
+            train_x_2D, train_y = under_sample_cluster(train_x_2D, train_y, samplePercentage=0.2, nbClusters=4)
+
+            # Start by finding the best kernel
+            best_kernel = self.finetuning_kernel(train_y, train_x_2D)
 
         # Result of finetuning:
         best_kernel = Matern(length_scale=0.0548, nu=1.5) + WhiteKernel(noise_level=0.00534)
@@ -80,7 +84,7 @@ class Model(object):
                                       random_state=42)
                 
         # Fit and store the gp
-        self.gp = gp.fit(train_x_2D_reduced, train_y_reduced)
+        self.gp = gp.fit(train_x_2D, train_y)
 
 
     def finetuning_kernel(self, train_y: np.ndarray,train_x_2D: np.ndarray):
