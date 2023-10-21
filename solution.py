@@ -257,7 +257,11 @@ def extract_city_area_information(train_x: np.ndarray, test_x: np.ndarray) -> ty
 
 def under_sample_cluster(train_x_2D: np.ndarray, train_y: np.ndarray, samplePercentage: int, nbClusters: int) -> pd.DataFrame:
     """
-    
+    This function undersample the big dataset using clustering
+    :param train_x_2D: Training features as a 2d NumPy float array of shape (NUM_SAMPLES, 2)
+    :param train_y: Training pollution concentrations as a 1d NumPy float array of shape (NUM_SAMPLES,)
+    :param samplePercentage: The percentage we want to keep from each cluster
+    :param nbClusters: Number of cluster to partition the data
     """
     
     # Build the data frame
