@@ -34,7 +34,8 @@ class Model(object):
         self.rng = np.random.default_rng(seed=0)
 
         # TODO: Add custom initialization for your model here if necessary
-        
+        self.fine_tuning = False
+
 
     def make_predictions(self, test_x_2D: np.ndarray, test_x_AREA: np.ndarray) -> typing.Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
@@ -63,10 +64,9 @@ class Model(object):
         """
 
         # TODO: Fit your model here
-        fine_tuning = False
 
         # If we didn't fine tune the model
-        if fine_tuning:
+        if self.fine_tuning:
             # data preprocessing
             train_x_2D_reduced, train_y_reduced = under_sample_cluster(train_x_2D, train_y, samplePercentage=0.3, nbClusters=4)
 
