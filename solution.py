@@ -68,23 +68,37 @@ class Model(object):
         # If we didn't fine tune the model
         if fine_tuning:
             # data preprocessing
-            train_x_2D, train_y = under_sample_cluster(train_x_2D, train_y, samplePercentage=0.2, nbClusters=4)
+            train_x_2D_reduced, train_y_reduced = under_sample_cluster(train_x_2D, train_y, samplePercentage=0.3, nbClusters=4)
 
             # Start by finding the best kernel
-            best_kernel = self.finetuning_kernel(train_y, train_x_2D)
+            best_kernel = self.finetuning_kernel(train_y_reduced, train_x_2D_reduced)
 
-        # Result of finetuning:
-        best_kernel = Matern(length_scale=0.0548, nu=1.5) + WhiteKernel(noise_level=0.00534)
+            # Train on the whole dataset
+            gp = GaussianProcessRegressor(kernel=best_kernel, 
+                                        #optimizer=None,
+                                        normalize_y=True, # Common convention for the prior to have mean 0
+                                        n_restarts_optimizer=5,
+                                        random_state=42)
+            
+            # Take a bigger sample of data
+            train_x_2D, train_y = under_sample_cluster(train_x_2D, train_y, samplePercentage=0.6, nbClusters=4)
 
-        # Try to improve the likelihood for the best kernel obtained
-        gp = GaussianProcessRegressor(kernel=best_kernel, 
-                                      optimizer=None, # Finetune already done
-                                      normalize_y=True, # Common convention for the prior to have mean 0
-                                      n_restarts_optimizer=5, 
-                                      random_state=42)
+            # Fit and store the gp
+            self.gp = gp.fit(train_x_2D, train_y)
+
+        else:
+            # Result of finetuning:
+            best_kernel = Matern(length_scale=0.0548, nu=1.5) + WhiteKernel(noise_level=0.00534)
+
+            # Try to improve the likelihood for the best kernel obtained
+            gp = GaussianProcessRegressor(kernel=best_kernel, 
+                                        optimizer=None, # Finetune already done
+                                        normalize_y=True, # Common convention for the prior to have mean 0
+                                        n_restarts_optimizer=0, # Finetune already done
+                                        random_state=42)
                 
-        # Fit and store the gp
-        self.gp = gp.fit(train_x_2D, train_y)
+            # Fit and store the gp
+            self.gp = gp.fit(train_x_2D, train_y)
 
 
     def finetuning_kernel(self, train_y: np.ndarray,train_x_2D: np.ndarray):
