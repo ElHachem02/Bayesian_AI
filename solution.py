@@ -33,7 +33,7 @@ class Model(object):
         """
         self.rng = np.random.default_rng(seed=0)
 
-        # TODO: Add custom initialization for your model here if necessary
+        # Add custom initialization for your model here if necessary
         self.fine_tuning = False
 
 
@@ -47,10 +47,10 @@ class Model(object):
             containing your predictions, the GP posterior mean, and the GP posterior stddev (in that order)
         """
 
-        # TODO: Use your GP to estimate the posterior mean and stddev for each city_area here
+        # Use your GP to estimate the posterior mean and stddev for each city_area here
         gp_mean, gp_std = self.gp.predict(test_x_2D, return_std=True)
 
-        # TODO: Use the GP posterior to form your predictions here
+        # Use the GP posterior to form your predictions here
         k = 1 # Found after tuning on my validation data from training data
         predictions = gp_mean + test_x_AREA * k * gp_std
 
@@ -63,7 +63,7 @@ class Model(object):
         :param train_y: Training pollution concentrations as a 1d NumPy float array of shape (NUM_SAMPLES,)
         """
 
-        # TODO: Fit your model here
+        # Fit your model here
 
         # If we didn't fine tune the model
         if self.fine_tuning:
@@ -257,7 +257,7 @@ def extract_city_area_information(train_x: np.ndarray, test_x: np.ndarray) -> ty
     test_x_2D = np.zeros((test_x.shape[0], 2), dtype=float)
     test_x_AREA = np.zeros((test_x.shape[0],), dtype=bool)
 
-    #TODO: Extract the city_area information from the training and test features
+    # Extract the city_area information from the training and test features
     train_x_2D = train_x[:, :2]  # Extracting longitude and latitude
     train_x_AREA = train_x[:, 2].astype(bool)  # Extracting area_id
 
