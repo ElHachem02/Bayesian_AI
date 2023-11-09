@@ -31,6 +31,9 @@ Note that MAP inference can take a long time.
 
 
 def main():
+    print("Running main. This main() method is for testing purposes")
+    
+    """
     raise RuntimeError(
         "This main() method is for illustrative purposes only"
         " and will NEVER be called when running your solution to generate your submission file!\n"
@@ -38,6 +41,7 @@ def main():
         "You can remove this exception for local testing, but be aware that any changes to the main() method"
         " are ignored when generating your submission file."
     )
+    """
 
     data_dir = pathlib.Path.cwd()
     model_dir = pathlib.Path.cwd()
