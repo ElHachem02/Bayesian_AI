@@ -164,8 +164,9 @@ class SWAGInference(object):
         self.current_epoch = 0
 
         # Full SWAG
-        # TODO(2): create attributes for SWAG-diagonal
+        #  (2): create attributes for SWAG-diagonal
         #  Hint: check collections.deque
+        self.weight_deviations = collections.deque(maxlen=self.deviation_matrix_max_rank)
 
         # Calibration, prediction, and other attributes
         # TODO(2): create additional attributes, e.g., for calibration
@@ -188,8 +189,17 @@ class SWAGInference(object):
 
         # Full SWAG
         if self.inference_mode == InferenceMode.SWAG_FULL:
-            # TODO(2): update full SWAG attributes for weight `name` using `current_params` and `param`
-            raise NotImplementedError("Update full SWAG statistics")
+            # (2): update full SWAG attributes for weight `name` using `current_params` and `param`
+
+            # Calculate the deviation from the mean
+            deviation = {name: param - self.running_first_moment[name] for name, param in current_params.items()}
+
+            # Manage the size of the deviation matrix D
+            if len(self.weight_deviations) == self.deviation_matrix_max_rank:
+                self.weight_deviations.popleft()  # Remove the oldest column if D has reached its max size
+
+            # Add the deviation to the deque
+            self.weight_deviations.append(deviation)
 
     def fit_swag(self, loader: torch.utils.data.DataLoader) -> None:
         """
@@ -357,9 +367,23 @@ class SWAGInference(object):
 
             # Full SWAG part
             if self.inference_mode == InferenceMode.SWAG_FULL:
-                # TODO(2): Sample parameter values for full SWAG
-                raise NotImplementedError("Sample parameter for full SWAG")
-                sampled_param += ...
+                # (2): Sample parameter values for full SWAG
+
+                # Define the rank K of the low-rank approximation
+                K = int(self.swag_epochs / 2)
+
+                # Generate random coefficients for the low-rank part
+                z_2 = torch.randn(K)
+
+                # Compute the low-rank component
+                low_rank_component = torch.zeros_like(param)
+                for deviation, z2_val in zip(reversed(self.weight_deviations)[-K:], z_2):
+                    for name in low_rank_component:
+                        low_rank_component[name] += deviation[name] * z2_val
+
+                # Combine the diagonal and low-rank components with the SWA mean
+                low_rank_adjustment = low_rank_component[name] / np.sqrt(2 * (K - 1))
+                sampled_param += low_rank_adjustment
 
             # Modify weight value in-place; directly changing self.network
             param.data = sampled_param
