@@ -187,19 +187,19 @@ class SWAGInference(object):
             self.running_first_moment[name] = (n * self.running_first_moment[name] + param) / (n + 1)
             self.running_second_moment[name] = (n * self.running_second_moment[name] + param ** 2) / (n + 1)
 
-            # Full SWAG
-            if self.inference_mode == InferenceMode.SWAG_FULL:
-                # (2): update full SWAG attributes for weight `name` using `current_params` and `param`
+        # Full SWAG
+        if self.inference_mode == InferenceMode.SWAG_FULL:
+            # (2): update full SWAG attributes for weight `name` using `current_params` and `param`
 
-                # Calculate the deviation from the mean
-                deviation = param - self.running_first_moment[name] 
+            # Calculate the deviation from the mean
+            deviation = {name: param - self.running_first_moment[name] for name, param in current_params.items()}
 
-                # Manage the size of the deviation matrix D
-                if len(self.weight_deviations) == self.deviation_matrix_max_rank:
-                    self.weight_deviations.popleft()  # Remove the oldest column if D has reached its max size
+            # Manage the size of the deviation matrix D
+            if len(self.weight_deviations) == self.deviation_matrix_max_rank:
+                self.weight_deviations.popleft()  # Remove the oldest column if D has reached its max size
 
-                # Add the deviation to the deque
-                self.weight_deviations.append(deviation)
+            # Add the deviation to the deque
+            self.weight_deviations.append(deviation)
 
 
     def fit_swag(self, loader: torch.utils.data.DataLoader) -> None:
@@ -375,9 +375,9 @@ class SWAGInference(object):
                 # Generate random coefficients for the low-rank part
                 z_2 = torch.randn(K)
 
-                low_rank_component = torch.zeros(k)
+                low_rank_component = torch.zeros(param.size())
                 for k, deviation in enumerate(self.weight_deviations):
-                    low_rank_component += deviation[k] * z_2[k]
+                    low_rank_component += deviation[name] * z_2[k]
 
                 # Combine the diagonal and low-rank components with the SWA mean
                 low_rank_adjustment = low_rank_component / np.sqrt(2 * (K - 1))
