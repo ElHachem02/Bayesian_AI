@@ -117,8 +117,8 @@ class SWAGInference(object):
         train_xs: torch.Tensor,
         model_dir: pathlib.Path,
         # (1): change inference_mode to InferenceMode.SWAG_DIAGONAL
-        # TODO(2): change inference_mode to InferenceMode.SWAG_FULL
-        inference_mode: InferenceMode = InferenceMode.SWAG_DIAGONAL,
+        # (2): change inference_mode to InferenceMode.SWAG_FULL
+        inference_mode: InferenceMode = InferenceMode.SWAG_FULL,
         # TODO(2): optionally add/tweak hyperparameters
         swag_epochs: int = 30,
         swag_learning_rate: float = 0.045,
@@ -187,19 +187,20 @@ class SWAGInference(object):
             self.running_first_moment[name] = (n * self.running_first_moment[name] + param) / (n + 1)
             self.running_second_moment[name] = (n * self.running_second_moment[name] + param ** 2) / (n + 1)
 
-        # Full SWAG
-        if self.inference_mode == InferenceMode.SWAG_FULL:
-            # (2): update full SWAG attributes for weight `name` using `current_params` and `param`
+            # Full SWAG
+            if self.inference_mode == InferenceMode.SWAG_FULL:
+                # (2): update full SWAG attributes for weight `name` using `current_params` and `param`
 
-            # Calculate the deviation from the mean
-            deviation = {name: param - self.running_first_moment[name] for name, param in current_params.items()}
+                # Calculate the deviation from the mean
+                deviation = param - self.running_first_moment[name] 
 
-            # Manage the size of the deviation matrix D
-            if len(self.weight_deviations) == self.deviation_matrix_max_rank:
-                self.weight_deviations.popleft()  # Remove the oldest column if D has reached its max size
+                # Manage the size of the deviation matrix D
+                if len(self.weight_deviations) == self.deviation_matrix_max_rank:
+                    self.weight_deviations.popleft()  # Remove the oldest column if D has reached its max size
 
-            # Add the deviation to the deque
-            self.weight_deviations.append(deviation)
+                # Add the deviation to the deque
+                self.weight_deviations.append(deviation)
+
 
     def fit_swag(self, loader: torch.utils.data.DataLoader) -> None:
         """
@@ -369,20 +370,17 @@ class SWAGInference(object):
             if self.inference_mode == InferenceMode.SWAG_FULL:
                 # (2): Sample parameter values for full SWAG
 
-                # Define the rank K of the low-rank approximation
-                K = int(self.swag_epochs / 2)
+                K = self.deviation_matrix_max_rank
 
                 # Generate random coefficients for the low-rank part
                 z_2 = torch.randn(K)
 
-                # Compute the low-rank component
-                low_rank_component = torch.zeros_like(param)
-                for deviation, z2_val in zip(reversed(self.weight_deviations)[-K:], z_2):
-                    for name in low_rank_component:
-                        low_rank_component[name] += deviation[name] * z2_val
+                low_rank_component = torch.zeros(k)
+                for k, deviation in enumerate(self.weight_deviations):
+                    low_rank_component += deviation[k] * z_2[k]
 
                 # Combine the diagonal and low-rank components with the SWA mean
-                low_rank_adjustment = low_rank_component[name] / np.sqrt(2 * (K - 1))
+                low_rank_adjustment = low_rank_component / np.sqrt(2 * (K - 1))
                 sampled_param += low_rank_adjustment
 
             # Modify weight value in-place; directly changing self.network
