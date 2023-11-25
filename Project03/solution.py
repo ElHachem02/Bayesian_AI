@@ -1,13 +1,18 @@
 """Solution."""
 import numpy as np
+import matplotlib.pyplot as plt
 from scipy.optimize import fmin_l_bfgs_b
-# import additional ...
+from sklearn.gaussian_process.kernels import RBF, Matern, WhiteKernel, DotProduct
+from sklearn.gaussian_process import GaussianProcessRegressor
+
 
 
 # global variables
 DOMAIN = np.array([[0, 10]])  # restrict \theta in [0, 10]
 SAFETY_THRESHOLD = 4  # threshold, upper bound of SA
-
+MAX_ITERATIONS = 50   # Define the maximum number of iterations for Bayesian optimization
+STD_BIOAVAILABLE = 0.15
+STD_SA = 0.0001
 
 # TODO: implement a self-contained solution in the BO_algo class.
 # NOTE: main() is not called by the checker.
@@ -15,7 +20,29 @@ class BO_algo():
     def __init__(self):
         """Initializes the algorithm with a parameter configuration."""
         # TODO: Define all relevant class members for your BO algorithm here.
-        pass
+
+        # Initialize the Gaussian Process for bioavailability (logP)
+        kernel_f = 1.0 * RBF(length_scale=1.0, length_scale_bounds=(1e-2, 1e2)) + WhiteKernel(noise_level=STD_BIOAVAILABLE)
+        self.gp_f = GaussianProcessRegressor(kernel=kernel_f, alpha=0.5)
+
+        # Initialize the Gaussian Process for synthesizability (SA)
+        kernel_v = 1.0 * DotProduct() + 1.0 * Matern(length_scale=1.0, nu=2.5) + WhiteKernel(noise_level=STD_SA)
+        self.gp_v = GaussianProcessRegressor(kernel=kernel_v, alpha=np.sqrt(2))
+
+        #Define lambda penalty
+        self.lambda_penalty = 1  # Penalty weight for constraint violation
+
+        # Initialize data storage for observations
+        self.sampledPoints = np.empty((0, 1))
+        self.f_values = np.array([])
+        self.v_values = np.array([])
+
+        self.beta = 1.96
+        
+    def meets_constraint(self, x):
+        predicted_sa = self.gp_v.predict(x, return_std=False)
+        return predicted_sa[0] < SAFETY_THRESHOLD
+
 
     def next_recommendation(self):
         """
@@ -30,8 +57,9 @@ class BO_algo():
         # using functions f and v.
         # In implementing this function, you may use
         # optimize_acquisition_function() defined below.
+        pointToExplore = self.optimize_acquisition_function()
 
-        raise NotImplementedError
+        return np.array([[pointToExplore]])
 
     def optimize_acquisition_function(self):
         """Optimizes the acquisition function defined below (DO NOT MODIFY).
@@ -79,7 +107,13 @@ class BO_algo():
         """
         x = np.atleast_2d(x)
         # TODO: Implement the acquisition function you want to optimize.
-        raise NotImplementedError
+        meanPrediction, stdDeviation = self.gp_f.predict(x, return_std=True)
+        meanSa = self.gp_v.predict(x, return_std=False)
+
+        penalty = np.maximum(meanSa - SAFETY_THRESHOLD, 0)
+
+        ucb = meanPrediction + self.beta * stdDeviation 
+        return ucb - self.lambda_penalty*penalty
 
     def add_data_point(self, x: float, f: float, v: float):
         """
@@ -95,7 +129,14 @@ class BO_algo():
             SA constraint func
         """
         # TODO: Add the observed data {x, f, v} to your model.
-        raise NotImplementedError
+
+        self.sampledPoints = np.vstack([self.sampledPoints, x])
+        self.f_values = np.append(self.f_values, f)
+        self.v_values = np.append(self.v_values, v)
+
+        self.gp_f.fit(self.sampledPoints, self.f_values)
+        self.gp_v.fit(self.sampledPoints, self.v_values)
+
 
     def get_solution(self):
         """
@@ -107,8 +148,24 @@ class BO_algo():
             the optimal solution of the problem
         """
         # TODO: Return your predicted safe optimum of f.
-        raise NotImplementedError
+        
+        best_solution = 0
+        best_value = -np.inf
 
+        for _ in range(MAX_ITERATIONS):
+            x_next = self.next_recommendation()
+            y_f = self.gp_f.predict(x_next)
+            y_v = self.gp_v.predict(x_next)
+
+            self.add_data_point(x_next, y_f, y_v)
+
+            if self.meets_constraint(x_next):
+                if y_f > best_value:
+                    best_value = y_f
+                    best_solution = x_next
+
+        return best_solution
+    
     def plot(self, plot_recommendation: bool = True):
         """Plot objective and constraint posterior for debugging (OPTIONAL).
 
@@ -117,7 +174,49 @@ class BO_algo():
         plot_recommendation: bool
             Plots the recommended point if True.
         """
-        pass
+        # Generating a sequence of points within the domain
+        x = np.linspace(DOMAIN[0, 0], DOMAIN[0, 1], 100).reshape(-1, 1)
+
+        # Predicting for objective function
+        mean_f, std_f = self.gp_f.predict(x, return_std=True)
+
+        # Predicting for constraint function
+        mean_v, std_v = self.gp_v.predict(x, return_std=True)
+
+        # Plotting the objective function
+        plt.figure(figsize=(12, 5))
+        plt.subplot(1, 2, 1)
+        plt.plot(x, mean_f, 'r', lw=2)
+        plt.fill_between(x.ravel(), mean_f - 1.96 * std_f, mean_f + 1.96 * std_f, alpha=0.5)
+        plt.title("Objective Function (f)")
+        plt.xlabel("x")
+        plt.ylabel("f(x)")
+
+        # Plotting the constraint function
+        plt.subplot(1, 2, 2)
+        plt.plot(x, mean_v, 'b', lw=2)
+        plt.fill_between(x.ravel(), mean_v - 1.96 * std_v, mean_v + 1.96 * std_v, alpha=0.5)
+        plt.axhline(SAFETY_THRESHOLD, color='k', linestyle='--')
+        plt.title("Constraint Function (v)")
+        plt.xlabel("x")
+        plt.ylabel("v(x)")
+
+        # Optionally plotting the recommended point
+        if plot_recommendation:
+            recommended_x = self.next_recommendation()
+            recommended_f, _ = self.gp_f.predict(recommended_x, return_std=True)
+            recommended_v, _ = self.gp_v.predict(recommended_x, return_std=True)
+
+            plt.subplot(1, 2, 1)
+            plt.scatter(recommended_x, recommended_f, c='green', marker='*', s=100, label='Recommended Point')
+            plt.legend()
+
+            plt.subplot(1, 2, 2)
+            plt.scatter(recommended_x, recommended_v, c='green', marker='*', s=100, label='Recommended Point')
+            plt.legend()
+
+        plt.tight_layout()
+        plt.show()
 
 
 # ---
@@ -169,14 +268,16 @@ def main():
         # Get next recommendation
         x = agent.next_recommendation()
 
+        agent.plot()
+
         # Check for valid shape
         assert x.shape == (1, DOMAIN.shape[0]), \
             f"The function next recommendation must return a numpy array of " \
             f"shape (1, {DOMAIN.shape[0]})"
 
         # Obtain objective and constraint observation
-        obj_val = f(x) + np.randn()
-        cost_val = v(x) + np.randn()
+        obj_val = f(x) + np.random.randn()
+        cost_val = v(x) + np.random.randn()
         agent.add_data_point(x, obj_val, cost_val)
 
     # Validate solution
