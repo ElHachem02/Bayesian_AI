@@ -22,12 +22,12 @@ class BO_algo():
         # TODO: Define all relevant class members for your BO algorithm here.
 
         # Initialize the Gaussian Process for bioavailability (logP)
-        kernel_f = 1.0 * RBF(length_scale=1.0, length_scale_bounds=(1e-2, 1e2)) + WhiteKernel(noise_level=STD_BIOAVAILABLE)
-        self.gp_f = GaussianProcessRegressor(kernel=kernel_f, alpha=0.5)
+        kernel_f = 6.04**2 * Matern(length_scale=5.58, nu=2.5) + WhiteKernel(noise_level=0.444)
+        self.gp_f = GaussianProcessRegressor(kernel=kernel_f, n_restarts_optimizer=5, random_state=42)
 
         # Initialize the Gaussian Process for synthesizability (SA)
-        kernel_v = 1.0 * DotProduct() + 1.0 * Matern(length_scale=1.0, nu=2.5) + WhiteKernel(noise_level=STD_SA)
-        self.gp_v = GaussianProcessRegressor(kernel=kernel_v, alpha=np.sqrt(2))
+        kernel_v = 0.00316*2 * DotProduct(sigma_0=569) + 0.562*2 * Matern(length_scale=0.00143, nu=2.5) + WhiteKernel(noise_level=0.838)
+        self.gp_v = GaussianProcessRegressor(kernel=kernel_v, n_restarts_optimizer=5, random_state=42)
 
         #Define lambda penalty
         self.lambda_penalty = 1  # Penalty weight for constraint violation
@@ -41,8 +41,7 @@ class BO_algo():
         
     def meets_constraint(self, x):
         predicted_sa = self.gp_v.predict(x, return_std=False)
-        return predicted_sa[0] < SAFETY_THRESHOLD
-
+        return predicted_sa[0] + 4 < SAFETY_THRESHOLD
 
     def next_recommendation(self):
         """
@@ -58,6 +57,16 @@ class BO_algo():
         # In implementing this function, you may use
         # optimize_acquisition_function() defined below.
         pointToExplore = self.optimize_acquisition_function()
+        violates = not self.meets_constraint(np.array([[pointToExplore]]))
+
+        maxIter = 0
+
+        while(violates and maxIter < 20):
+            self.lambda_penalty += 0.01
+            pointToExplore = self.optimize_acquisition_function()
+            violates = not self.meets_constraint(np.array([[pointToExplore]]))
+            maxIter += 1
+
 
         return np.array([[pointToExplore]])
 
@@ -108,9 +117,9 @@ class BO_algo():
         x = np.atleast_2d(x)
         # TODO: Implement the acquisition function you want to optimize.
         meanPrediction, stdDeviation = self.gp_f.predict(x, return_std=True)
-        meanSa = self.gp_v.predict(x, return_std=False)
+        meanSa = self.gp_v.predict(x, return_std=False) + 4
 
-        penalty = np.maximum(meanSa - SAFETY_THRESHOLD, 0)
+        penalty = np.maximum(meanSa, 0)
 
         ucb = meanPrediction + self.beta * stdDeviation 
         return ucb - self.lambda_penalty*penalty
@@ -135,7 +144,7 @@ class BO_algo():
         self.v_values = np.append(self.v_values, v)
 
         self.gp_f.fit(self.sampledPoints, self.f_values)
-        self.gp_v.fit(self.sampledPoints, self.v_values)
+        self.gp_v.fit(self.sampledPoints, self.v_values - 4)
 
 
     def get_solution(self):
@@ -148,9 +157,10 @@ class BO_algo():
             the optimal solution of the problem
         """
         # TODO: Return your predicted safe optimum of f.
-        
-        best_solution = 0
+        '''
+        best_solution = None
         best_value = -np.inf
+        nonConstraintMeetingPoints = []
 
         for _ in range(MAX_ITERATIONS):
             x_next = self.next_recommendation()
@@ -163,8 +173,24 @@ class BO_algo():
                 if y_f > best_value:
                     best_value = y_f
                     best_solution = x_next
+            else:
+                nonConstraintMeetingPoints.append((x_next, y_v))
 
-        return best_solution
+        if(best_solution==None):
+            best_solution = sorted(nonConstraintMeetingPoints, key=lambda x: x[1])[0].first
+
+        return self.best_solution
+
+        '''
+
+        bestF = self.f_values[-1]
+        bestSolution = self.sampledPoints[-1]
+        for i in range(self.sampledPoints.shape[0]):
+            if self.meets_constraint([[self.v_values[i]]]):
+                if self.f_values[i] > bestF:
+                    bestSolution = self.sampledPoints[i]
+
+        return bestSolution
     
     def plot(self, plot_recommendation: bool = True):
         """Plot objective and constraint posterior for debugging (OPTIONAL).
@@ -182,6 +208,7 @@ class BO_algo():
 
         # Predicting for constraint function
         mean_v, std_v = self.gp_v.predict(x, return_std=True)
+        mean_v += 4
 
         # Plotting the objective function
         plt.figure(figsize=(12, 5))
@@ -206,6 +233,7 @@ class BO_algo():
             recommended_x = self.next_recommendation()
             recommended_f, _ = self.gp_f.predict(recommended_x, return_std=True)
             recommended_v, _ = self.gp_v.predict(recommended_x, return_std=True)
+            recommended_v += 4
 
             plt.subplot(1, 2, 1)
             plt.scatter(recommended_x, recommended_f, c='green', marker='*', s=100, label='Recommended Point')
@@ -267,9 +295,6 @@ def main():
     for j in range(20):
         # Get next recommendation
         x = agent.next_recommendation()
-
-        agent.plot()
-
         # Check for valid shape
         assert x.shape == (1, DOMAIN.shape[0]), \
             f"The function next recommendation must return a numpy array of " \
@@ -279,6 +304,8 @@ def main():
         obj_val = f(x) + np.random.randn()
         cost_val = v(x) + np.random.randn()
         agent.add_data_point(x, obj_val, cost_val)
+        agent.plot()
+
 
     # Validate solution
     solution = agent.get_solution()
@@ -292,6 +319,7 @@ def main():
     print(f'Optimal value: 0\nProposed solution {solution}\nSolution value '
           f'{f(solution)}\nRegret {regret}\nUnsafe-evals TODO\n')
 
+    return agent
 
 if __name__ == "__main__":
     main()
