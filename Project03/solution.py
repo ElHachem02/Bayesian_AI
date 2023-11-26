@@ -22,15 +22,15 @@ class BO_algo():
         # TODO: Define all relevant class members for your BO algorithm here.
 
         # Initialize the Gaussian Process for bioavailability (logP)
-        kernel_f = 6.04**2 * Matern(length_scale=5.58, nu=2.5) + WhiteKernel(noise_level=0.444)
-        self.gp_f = GaussianProcessRegressor(kernel=kernel_f, n_restarts_optimizer=5, random_state=42)
+        kernel_f = 1.32**2 * Matern(length_scale=3.25, nu=2.5) + WhiteKernel(noise_level=0.482)
+        self.gp_f = GaussianProcessRegressor(kernel=kernel_f, n_restarts_optimizer=5, normalize_y=True, random_state=42)
 
         # Initialize the Gaussian Process for synthesizability (SA)
-        kernel_v = 0.00316*2 * DotProduct(sigma_0=569) + 0.562*2 * Matern(length_scale=0.00143, nu=2.5) + WhiteKernel(noise_level=0.838)
-        self.gp_v = GaussianProcessRegressor(kernel=kernel_v, n_restarts_optimizer=5, random_state=42)
+        kernel_v = 0.00316**2 * DotProduct(sigma_0=0.000248) + 0.309**2 * Matern(length_scale=0.393, nu=2.5) + WhiteKernel(noise_level=0.909)
+        self.gp_v = GaussianProcessRegressor(kernel=kernel_v, n_restarts_optimizer=5, normalize_y=True, random_state=42)
 
         #Define lambda penalty
-        self.lambda_penalty = 1  # Penalty weight for constraint violation
+        self.lambda_penalty = 2  # Penalty weight for constraint violation
 
         # Initialize data storage for observations
         self.sampledPoints = np.empty((0, 1))
@@ -39,9 +39,12 @@ class BO_algo():
 
         self.beta = 1.96
         
+
     def meets_constraint(self, x):
-        predicted_sa = self.gp_v.predict(x, return_std=False)
-        return predicted_sa[0] + 4 < SAFETY_THRESHOLD
+        predicted_sa, std = self.gp_v.predict(x, return_std=True)
+
+        return predicted_sa + std * self.beta < SAFETY_THRESHOLD
+
 
     def next_recommendation(self):
         """
@@ -52,24 +55,34 @@ class BO_algo():
         recommendation: float
             the next point to evaluate
         """
-        # TODO: Implement the function which recommends the next point to query
+        # Implement the function which recommends the next point to query
         # using functions f and v.
         # In implementing this function, you may use
         # optimize_acquisition_function() defined below.
-        pointToExplore = self.optimize_acquisition_function()
-        violates = not self.meets_constraint(np.array([[pointToExplore]]))
 
-        maxIter = 0
+        max_tries = 10 
+        lambda_increase_factor = 1.5
 
-        while(violates and maxIter < 20):
-            self.lambda_penalty += 0.01
-            pointToExplore = self.optimize_acquisition_function()
-            violates = not self.meets_constraint(np.array([[pointToExplore]]))
-            maxIter += 1
+        smallest_v = float('inf')
+        best_x = None
 
+        for _ in range(max_tries):
+            x_next = np.array([[self.optimize_acquisition_function()]])
+            v_mean, v_std = self.gp_v.predict(x_next, return_std=True)
+            v_value = v_mean + self.beta * v_std
 
-        return np.array([[pointToExplore]])
+            if v_value < smallest_v:
+                smallest_v = v_value
+                best_x = x_next
 
+            if self.meets_constraint(x_next):
+                return x_next
+            else:
+                self.lambda_penalty *= lambda_increase_factor  # Increase lambda_penalt
+        
+        return best_x
+        
+        
     def optimize_acquisition_function(self):
         """Optimizes the acquisition function defined below (DO NOT MODIFY).
 
@@ -99,6 +112,7 @@ class BO_algo():
         x_opt = x_values[ind].item()
 
         return x_opt
+    
 
     def acquisition_function(self, x: np.ndarray):
         """Compute the acquisition function for x.
@@ -115,11 +129,11 @@ class BO_algo():
             Value of the acquisition function at x
         """
         x = np.atleast_2d(x)
-        # TODO: Implement the acquisition function you want to optimize.
+        # Implement the acquisition function you want to optimize.
         meanPrediction, stdDeviation = self.gp_f.predict(x, return_std=True)
-        meanSa = self.gp_v.predict(x, return_std=False) + 4
+        meanSa, stdSa = self.gp_v.predict(x, return_std=True)
 
-        penalty = np.maximum(meanSa, 0)
+        penalty = np.maximum(meanSa + stdSa * self.beta - SAFETY_THRESHOLD, 0)
 
         ucb = meanPrediction + self.beta * stdDeviation 
         return ucb - self.lambda_penalty*penalty
@@ -144,7 +158,7 @@ class BO_algo():
         self.v_values = np.append(self.v_values, v)
 
         self.gp_f.fit(self.sampledPoints, self.f_values)
-        self.gp_v.fit(self.sampledPoints, self.v_values - 4)
+        self.gp_v.fit(self.sampledPoints, self.v_values)
 
 
     def get_solution(self):
@@ -208,7 +222,6 @@ class BO_algo():
 
         # Predicting for constraint function
         mean_v, std_v = self.gp_v.predict(x, return_std=True)
-        mean_v += 4
 
         # Plotting the objective function
         plt.figure(figsize=(12, 5))
@@ -233,7 +246,6 @@ class BO_algo():
             recommended_x = self.next_recommendation()
             recommended_f, _ = self.gp_f.predict(recommended_x, return_std=True)
             recommended_v, _ = self.gp_v.predict(recommended_x, return_std=True)
-            recommended_v += 4
 
             plt.subplot(1, 2, 1)
             plt.scatter(recommended_x, recommended_f, c='green', marker='*', s=100, label='Recommended Point')
