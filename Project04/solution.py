@@ -66,8 +66,11 @@ class Actor:
         # TODO: Implement this function which sets up the actor network. 
         # Take a look at the NeuralNetwork class in utils.py. 
         self.actorNetwork = NeuralNetwork(input_dim=self.state_dim, hidden_layers=self.hidden_layers, 
-                                          hidden_size=self.hidden_size, output_dim=self.action_dim + 1)
-        pass
+                                         hidden_size=self.hidden_size, output_dim=self.action_dim*2, activation="").to(self.device)
+        
+        self.optimizer = optim.Adam(self.actor_network.parameters(), lr=self.actor_lr)
+
+        
 
     def clamp_log_std(self, log_std: torch.Tensor) -> torch.Tensor:
         '''
@@ -214,6 +217,8 @@ class Agent:
         batch = self.memory.sample(self.batch_size)
         s_batch, a_batch, r_batch, s_prime_batch = batch
 
+
+
         # TODO: Implement Critic(s) update here.
 
         # TODO: Implement Policy update here
@@ -228,7 +233,7 @@ if __name__ == '__main__':
 
     # You may set the save_video param to output the video of one of the evalution episodes, or 
     # you can disable console printing during training and testing by setting verbose to False.
-    save_video = False
+    save_video = True
     verbose = True
 
     agent = Agent()
