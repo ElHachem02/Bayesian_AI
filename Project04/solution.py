@@ -24,25 +24,24 @@ class NeuralNetwork(nn.Module):
         # with a variable number of hidden layers and hidden units.
         # Here you should define layers which your network will use.
         
-        # Define activation
-        self.activation = nn.ReLu() if activation == "relu" else nn.Tanh()
-        
-        # Hidden layers
-        self.hidden = [nn.Linear(input_dim, hidden_size)]
-        for _ in range(hidden_layers - 2):
-            self.hidden.append(nn.Linear(hidden_size, hidden_size))
-        self.hidden.append(nn.Linear(hidden_size, output_dim))
+        # Define activation function
+        activation = nn.ReLU() if activation == "relu" else nn.Tanh()
+
+        # Create a list of layers
+        layers = [nn.Linear(input_dim, hidden_size), activation]
+        for _ in range(hidden_layers - 1):
+            layers.append(nn.Linear(hidden_size, hidden_size))
+            layers.append(activation)
+        # Add the output layer
+        layers.append(nn.Linear(hidden_size, output_dim))
+
+        # Use nn.Sequential for simplicity
+        self.model = nn.Sequential(*layers)
         
 
     def forward(self, s: torch.Tensor) -> torch.Tensor:
         # Implement the forward pass for the neural network you have defined.
-        for idx, layer in enumerate(self.hidden):
-            h = layer(s)
-            # Don't apply activation to last layer
-            if idx < len(self.layers) - 1:  
-                h = self.activation(h)
-
-        return h
+        return self.model(s)
     
 class Actor:
     def __init__(self,hidden_size: int, hidden_layers: int, actor_lr: float,
