@@ -39,6 +39,7 @@ class NeuralNetwork(nn.Module):
         self.model = nn.Sequential(*layers)
         
 
+
     def forward(self, s: torch.Tensor) -> torch.Tensor:
         # Implement the forward pass for the neural network you have defined.
         return self.model(s)
@@ -64,6 +65,8 @@ class Actor:
         '''
         # TODO: Implement this function which sets up the actor network. 
         # Take a look at the NeuralNetwork class in utils.py. 
+        self.actorNetwork = NeuralNetwork(input_dim=self.state_dim, hidden_layers=self.hidden_layers, 
+                                          hidden_size=self.hidden_size, output_dim=self.action_dim + 1)
         pass
 
     def clamp_log_std(self, log_std: torch.Tensor) -> torch.Tensor:
