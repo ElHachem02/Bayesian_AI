@@ -2,7 +2,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.optimize import fmin_l_bfgs_b
-from sklearn.gaussian_process.kernels import RBF, Matern, WhiteKernel, DotProduct
+from sklearn.gaussian_process.kernels import ConstantKernel, Matern, WhiteKernel, DotProduct
 from sklearn.gaussian_process import GaussianProcessRegressor
 
 
@@ -12,10 +12,10 @@ DOMAIN = np.array([[0, 10]])  # restrict \theta in [0, 10]
 SAFETY_THRESHOLD = 4  # threshold, upper bound of SA
 MAX_ITERATIONS = 50   # Define the maximum number of iterations for Bayesian optimization
 STD_BIOAVAILABLE = 0.15
-STD_SA = 0.0001
+STD_SA = 1e-4
 
-# TODO: implement a self-contained solution in the BO_algo class.
-# NOTE: main() is not called by the checker.
+# Implement a self-contained solution in the BO_algo class.
+# main() is not called by the checker.
 class BO_algo():
     def __init__(self):
         """Initializes the algorithm with a parameter configuration."""
@@ -135,7 +135,7 @@ class BO_algo():
 
         penalty = np.maximum(meanSa + stdSa * self.beta - SAFETY_THRESHOLD, 0)
 
-        ucb = meanPrediction + self.beta * stdDeviation 
+        ucb = meanPrediction + 1.08 * stdDeviation
         return ucb - self.lambda_penalty*penalty
 
     def add_data_point(self, x: float, f: float, v: float):
@@ -214,6 +214,7 @@ class BO_algo():
         plot_recommendation: bool
             Plots the recommended point if True.
         """
+        return
         # Generating a sequence of points within the domain
         x = np.linspace(DOMAIN[0, 0], DOMAIN[0, 1], 100).reshape(-1, 1)
 
@@ -303,6 +304,9 @@ def main():
     cost_val = v(x_init)
     agent.add_data_point(x_init, obj_val, cost_val)
 
+    # Initialize unsafe evaluations counter
+    unsafe_evals_count = 0
+
     # Loop until budget is exhausted
     for j in range(20):
         # Get next recommendation
@@ -318,6 +322,10 @@ def main():
         agent.add_data_point(x, obj_val, cost_val)
         agent.plot()
 
+        # Check if the evaluation is unsafe
+        if not agent.meets_constraint(x):
+            unsafe_evals_count += 1
+
 
     # Validate solution
     solution = agent.get_solution()
@@ -329,7 +337,7 @@ def main():
     regret = (0 - f(solution))
 
     print(f'Optimal value: 0\nProposed solution {solution}\nSolution value '
-          f'{f(solution)}\nRegret {regret}\nUnsafe-evals TODO\n')
+          f'{f(solution)}\nRegret {regret}\nUnsafe-evals {unsafe_evals_count}\n')
 
     return agent
 
