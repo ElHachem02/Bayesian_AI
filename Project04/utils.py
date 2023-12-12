@@ -109,6 +109,7 @@ def run_episode(env, agent, rec=None, verbose=False, train=True):
     mode = "TRAIN" if train else "TEST"
     state, _ = env.reset()
     episode_return, truncated = 0.0, False
+    # For each environment step
     while not truncated:
         action = agent.get_action(state, train)
 

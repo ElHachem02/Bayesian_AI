@@ -147,9 +147,12 @@ class Agent:
         self.setup_agent()
 
     def setup_agent(self):
-        # TODO: Setup off-policy agent with policy and critic classes. 
-        # Feel free to instantiate any other parameters you feel you might need.   
-        pass
+        # Setup off-policy agent with policy and critic classes. 
+        # Feel free to instantiate any other parameters you feel you might need. 
+
+        #TODO(Ronan) Finetune these parameters
+        self.actor = Actor(hidden_size=10, hidden_layers=3, actor_lr=0.001)
+        self.critic = Critic(hidden_size=10, hidden_layers=3, actor_lr=0.001)
 
     def get_action(self, s: np.ndarray, train: bool) -> np.ndarray:
         """
@@ -158,8 +161,8 @@ class Agent:
                     You can find it useful if you want to sample from deterministic policy.
         :return: np.ndarray,, action to apply on the environment, shape (1,)
         """
-        # TODO: Implement a function that returns an action from the policy for the state s.
-        action = np.random.uniform(-1, 1, (1,))
+        # Implement a function that returns an action from the policy for the state s.
+        action, _ = self.actor.get_action_and_log_prob(state=s, deterministic=(not train))
 
         assert action.shape == (1,), 'Incorrect action shape.'
         assert isinstance(action, np.ndarray ), 'Action dtype must be np.ndarray' 
@@ -202,6 +205,7 @@ class Agent:
         # TODO: Implement one step of training for the agent.
         # Hint: You can use the run_gradient_update_step for each policy and critic.
         # Example: self.run_gradient_update_step(self.policy, policy_loss)
+
 
         # Batch sampling
         batch = self.memory.sample(self.batch_size)
