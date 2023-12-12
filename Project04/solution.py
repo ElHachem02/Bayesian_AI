@@ -20,13 +20,29 @@ class NeuralNetwork(nn.Module):
                                 hidden_layers: int, activation: str):
         super(NeuralNetwork, self).__init__()
 
-        # TODO: Implement this function which should define a neural network 
+        # Implement this function which should define a neural network 
         # with a variable number of hidden layers and hidden units.
         # Here you should define layers which your network will use.
+        
+        # Define activation
+        self.activation = nn.ReLu() if activation == "relu" else nn.Tanh()
+        
+        # Hidden layers
+        self.hidden = [nn.Linear(input_dim, hidden_size)]
+        for _ in range(hidden_layers - 2):
+            self.hidden.append(nn.Linear(hidden_size, hidden_size))
+        self.hidden.append(nn.Linear(hidden_size, output_dim))
+        
 
     def forward(self, s: torch.Tensor) -> torch.Tensor:
-        # TODO: Implement the forward pass for the neural network you have defined.
-        pass
+        # Implement the forward pass for the neural network you have defined.
+        for idx, layer in enumerate(self.hidden):
+            h = layer(s)
+            # Don't apply activation to last layer
+            if idx < len(self.layers) - 1:  
+                h = self.activation(h)
+
+        return h
     
 class Actor:
     def __init__(self,hidden_size: int, hidden_layers: int, actor_lr: float,
