@@ -7,6 +7,8 @@ from gym.wrappers.monitoring.video_recorder import VideoRecorder
 import warnings
 from typing import Union
 from utils import ReplayBuffer, get_env, run_episode
+import torch.nn.functional as F
+
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -66,9 +68,10 @@ class Actor:
         # TODO: Implement this function which sets up the actor network. 
         # Take a look at the NeuralNetwork class in utils.py. 
         self.actorNetwork = NeuralNetwork(input_dim=self.state_dim, hidden_layers=self.hidden_layers, 
-                                         hidden_size=self.hidden_size, output_dim=self.action_dim*2, activation="").to(self.device)
+                                         hidden_size=self.hidden_size, output_dim=self.action_dim*2, activation="relu").to(self.device)
         
-        self.optimizer = optim.Adam(self.actor_network.parameters(), lr=self.actor_lr)
+        self.optimizer = optim.Adam(self.actorNetwork.parameters(), lr=self.actor_lr)
+
 
         
 
@@ -92,6 +95,18 @@ class Actor:
         '''
         assert state.shape == (3,) or state.shape[1] == self.state_dim, 'State passed to this method has a wrong shape'
         action , log_prob = torch.zeros(state.shape[0]), torch.ones(state.shape[0])
+
+        mean, logStd = self.actorNetwork(state)
+        logStd = self.clamp_log_std(logStd)
+        std = logStd.exp()
+
+        # turn into a normal distribution
+        normalDistribution = Normal(mean, std)
+        
+        
+
+
+
         # TODO: Implement this function which returns an action and its log probability.
         # If working with stochastic policies, make sure that its log_std are clamped 
         # using the clamp_log_std function.
@@ -212,7 +227,6 @@ class Agent:
         # Hint: You can use the run_gradient_update_step for each policy and critic.
         # Example: self.run_gradient_update_step(self.policy, policy_loss)
 
-
         # Batch sampling
         batch = self.memory.sample(self.batch_size)
         s_batch, a_batch, r_batch, s_prime_batch = batch
@@ -220,6 +234,35 @@ class Agent:
 
 
         # TODO: Implement Critic(s) update here.
+        # Compute target Q-values
+        with torch.no_grad():
+            # Here, you should split the output of the target actor network into the next action and log probability.
+            next_state_actions, next_state_log_prob = self.actor.get_action_and_log_prob(s_prime_batch, deterministic=False)
+            target_q1, target_q2 = self.critic(s_prime_batch, next_state_actions)
+            target_q_values = r_batch + self.gamma * (1 - done_batch) * (torch.min(target_q1, target_q2) - self.alpha * next_state_log_prob)
+
+        # Compute critic loss
+        current_q1, current_q2 = self.critic(s_batch, a_batch)
+        critic_loss1 = F.mse_loss(current_q1, target_q_values)
+        critic_loss2 = F.mse_loss(current_q2, target_q_values)
+        critic_loss = critic_loss1 + critic_loss2
+
+        # Gradient update step for critic
+        self.run_gradient_update_step(self.critic, critic_loss)
+
+        # Compute policy loss
+        new_actions, log_prob = self.actor.get_action_and_log_prob(s_batch, deterministic=False)
+        q1_new, q2_new = self.critic(s_batch, new_actions)
+        q_new = torch.min(q1_new, q2_new)
+        policy_loss = (self.alpha * log_prob - q_new).mean()
+
+        # Gradient update step for policy
+        self.run_gradient_update_step(self.actor, policy_loss)
+
+        # Optional: Update target networks (soft updates)
+        self.critic_target_update(self.critic, self.critic, self.tau, soft_update=True)
+        self.critic_target_update(self.actor, self.actor, self.tau, soft_update=True)        
+
 
         # TODO: Implement Policy update here
 
