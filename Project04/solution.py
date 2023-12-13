@@ -252,13 +252,10 @@ class Agent:
         from the replay buffer,and then updates the policy and critic networks 
         using the sampled batch.
         '''
-        # TODO: Implement one step of training for the agent.
+        # Implement one step of training for the agent.
         # Hint: You can use the run_gradient_update_step for each policy and critic.
         # Example: self.run_gradient_update_step(self.policy, policy_loss)
         # Only start training if enough samples are in the buffer
-        if not self.memory.start_training():
-            return
-
 
         # Batch sampling
         batch = self.memory.sample(self.batch_size)
@@ -271,35 +268,40 @@ class Agent:
         self.critic_target_update(self.critic_1.criticNetwork, self.critic1_target.criticNetwork, tau=self.tau, soft_update=True)
         self.critic_target_update(self.critic_2.criticNetwork, self.critic2_target.criticNetwork, tau=self.tau, soft_update=True)
 
-
+    # gradient step critique
     def update_critics(self, s_batch, a_batch, r_batch, s_prime_batch):
         """Update critic networks."""
         with torch.no_grad():
             predicted_actions, predicted_log_probs = self.actor.get_action_and_log_prob(s_prime_batch, deterministic=False)
-            next_critic_input = torch.cat((s_prime_batch, predicted_actions), dim=1)
-            target_q1 = self.critic1_target.criticNetwork(next_critic_input)
-            target_q2 = self.critic2_target.criticNetwork(next_critic_input)
-            target_q_min = torch.min(target_q1, target_q2) - self.temp.get_param() * predicted_log_probs
-            target_q_values = r_batch + self.gamma * target_q_min
+            next_critic = torch.cat((s_prime_batch, predicted_actions), dim=1)
+            target_q1 = self.critic1_target.criticNetwork(next_critic)
+            target_q2 = self.critic2_target.criticNetwork(next_critic)
+            # entropy appriximated by log probs
+            # q is the value function
+            # this way we aim to maximize entrooy while maximising value function
+            target_q = torch.min(target_q1, target_q2) - self.temp.get_param() * predicted_log_probs
+            target_q_values = r_batch + self.gamma * target_q
 
-        current_critic_input = torch.cat((s_batch, a_batch), dim=1)
-        current_q1 = self.critic_1.criticNetwork(current_critic_input)
-        current_q2 = self.critic_2.criticNetwork(current_critic_input)
-        critic_loss1 = F.mse_loss(current_q1, target_q_values)
-        critic_loss2 = F.mse_loss(current_q2, target_q_values)
+        _state_action_pairs = torch.cat((s_batch, a_batch), dim=1)
+        # score of first cr neural network Q1
+        score_q1 = self.critic_1.criticNetwork(_state_action_pairs)
+        score_q2 = self.critic_2.criticNetwork(_state_action_pairs)
+        critic_loss1 = F.mse_loss(score_q1, target_q_values)
+        critic_loss2 = F.mse_loss(score_q2, target_q_values)
 
         self.run_gradient_update_step(self.critic_1, critic_loss1)
         self.run_gradient_update_step(self.critic_2, critic_loss2)
 
+    # gradient step actor
     def update_actor(self, s_batch):
         """Update actor network."""
-        new_actions, new_log_probs = self.actor.get_action_and_log_prob(s_batch, deterministic=False)
-        new_critic_input = torch.cat((s_batch, new_actions), dim=1)
-        new_q1 = self.critic_1.criticNetwork(new_critic_input)
-        new_q2 = self.critic_2.criticNetwork(new_critic_input)
-        new_q_min = torch.min(new_q1, new_q2)
+        possible_actions, log_prob_actions = self.actor.get_action_and_log_prob(s_batch, deterministic=False)
+        critic = torch.cat((s_batch, possible_actions), dim=1)
+        score_q1 = self.critic_1.criticNetwork(critic)
+        new_q2 = self.critic_2.criticNetwork(critic)
+        new_q = torch.min(score_q1, new_q2)
 
-        actor_loss = (self.temp.get_param() * new_log_probs - new_q_min).mean()
+        actor_loss = (self.temp.get_param() * log_prob_actions - new_q).mean()
         self.run_gradient_update_step(self.actor, actor_loss)
 
 
