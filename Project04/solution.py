@@ -188,10 +188,11 @@ class Agent:
     def setup_agent(self):
         # Setup off-policy agent with policy and critic classes. 
         # Feel free to instantiate any other parameters you feel you might need. 
-
         self.actor = Actor(hidden_size=self.hiddenSize, hidden_layers=self.hidden_layers, actor_lr=self.learningRate)
+        # Setup two q values network
         self.critic_1 = Critic(hidden_size=self.hiddenSize, hidden_layers=self.hidden_layers, critic_lr=self.learningRate)
         self.critic_2 = Critic(hidden_size=self.hiddenSize, hidden_layers=self.hidden_layers, critic_lr=self.learningRate)
+        # Setup their q values target to help in stabilizing training
         self.critic1_target = deepcopy(self.critic_1)
         self.critic2_target = deepcopy(self.critic_2)
         self.temp = TrainableParameter(init_param=0.2, lr_param=self.learningRate, train_param=True, device=self.device)
@@ -205,10 +206,8 @@ class Agent:
         """
         # Don't add these to the computation graph
         with torch.no_grad():
-            # Convert state to tensor
             s = torch.from_numpy(np.expand_dims(s, axis=0)).float()
 
-            # Run through actor network to get an action, use deterministic policy on eval and stochastic on train
             action, _ = self.actor.get_action_and_log_prob(s, not train)
 
             action = action.numpy()[0]
@@ -264,13 +263,14 @@ class Agent:
         self.update_critics(s_batch, a_batch, r_batch, s_prime_batch)
         self.update_actor(s_batch)
 
-        # Soft Update the Target Critic Networks
+        # Make the soft update of the critic targets' networks
         self.critic_target_update(self.critic_1.criticNetwork, self.critic1_target.criticNetwork, tau=self.tau, soft_update=True)
         self.critic_target_update(self.critic_2.criticNetwork, self.critic2_target.criticNetwork, tau=self.tau, soft_update=True)
 
     # gradient step critique
     def update_critics(self, s_batch, a_batch, r_batch, s_prime_batch):
         """Update critic networks."""
+        # Step 1: Calculate target Q-values for the next state using target critic networks
         with torch.no_grad():
             predicted_actions, predicted_log_probs = self.actor.get_action_and_log_prob(s_prime_batch, deterministic=False)
             next_critic = torch.cat((s_prime_batch, predicted_actions), dim=1)
@@ -278,14 +278,18 @@ class Agent:
             target_q2 = self.critic2_target.criticNetwork(next_critic)
             # entropy appriximated by log probs
             # q is the value function
-            # this way we aim to maximize entrooy while maximising value function
+            # this way we aim to maximize entropy while maximising value function
             target_q = torch.min(target_q1, target_q2) - self.temp.get_param() * predicted_log_probs
             target_q_values = r_batch + self.gamma * target_q
 
+        # Step 2: Combine target Q-values with rewards to gives them to critic network
         _state_action_pairs = torch.cat((s_batch, a_batch), dim=1)
-        # score of first cr neural network Q1
+
+        # Step 3: Calculate Q-values for current state-action pairs using main critic networks
         score_q1 = self.critic_1.criticNetwork(_state_action_pairs)
         score_q2 = self.critic_2.criticNetwork(_state_action_pairs)
+
+        # Step 4: Compute loss for each critic network
         critic_loss1 = F.mse_loss(score_q1, target_q_values)
         critic_loss2 = F.mse_loss(score_q2, target_q_values)
 
@@ -295,13 +299,20 @@ class Agent:
     # gradient step actor
     def update_actor(self, s_batch):
         """Update actor network."""
+        # Step 1: Generate possible actions and their log probabilities for the given batch of states
         possible_actions, log_prob_actions = self.actor.get_action_and_log_prob(s_batch, deterministic=False)
+        
+        # Step 2: Calculate Q-values for these state-action pairs using critic networks
         critic = torch.cat((s_batch, possible_actions), dim=1)
         score_q1 = self.critic_1.criticNetwork(critic)
-        new_q2 = self.critic_2.criticNetwork(critic)
-        new_q = torch.min(score_q1, new_q2)
+        score_q2 = self.critic_2.criticNetwork(critic)
 
+        # Step 3: Compute the minimum of the Q-values from the two critic networks
+        new_q = torch.min(score_q1, score_q2)
+
+        # Step 4: Calculate actor loss
         actor_loss = (self.temp.get_param() * log_prob_actions - new_q).mean()
+        
         self.run_gradient_update_step(self.actor, actor_loss)
 
 
