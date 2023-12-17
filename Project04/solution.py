@@ -308,10 +308,10 @@ class Agent:
         score_q2 = self.critic_2.criticNetwork(critic)
 
         # Step 3: Compute the minimum of the Q-values from the two critic networks
-        new_q = torch.min(score_q1, score_q2)
+        score_q = torch.min(score_q1, score_q2)
 
         # Step 4: Calculate actor loss
-        actor_loss = (self.temp.get_param() * log_prob_actions - new_q).mean()
+        actor_loss = (self.temp.get_param() * log_prob_actions - score_q).mean()
         
         self.run_gradient_update_step(self.actor, actor_loss)
 
