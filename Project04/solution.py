@@ -10,6 +10,12 @@ from typing import Union
 from utils import ReplayBuffer, get_env, run_episode
 import torch.nn.functional as F
 from copy import deepcopy
+torch.manual_seed(42)
+np.random.seed(42)
+if torch.cuda.is_available():
+    torch.cuda.manual_seed_all(42)
+
+
 
 
 
@@ -281,6 +287,7 @@ class Agent:
             # this way we aim to maximize entropy while maximising value function
             target_q = torch.min(target_q1, target_q2) - self.temp.get_param() * predicted_log_probs
             target_q_values = r_batch + self.gamma * target_q
+            target_q_values = target_q_values
 
         # Step 2: Combine target Q-values with rewards to gives them to critic network
         _state_action_pairs = torch.cat((s_batch, a_batch), dim=1)
@@ -311,7 +318,7 @@ class Agent:
         score_q = torch.min(score_q1, score_q2)
 
         # Step 4: Calculate actor loss
-        actor_loss = (self.temp.get_param() * log_prob_actions - score_q).mean()
+        actor_loss = (self.temp.get_param() * log_prob_actions - score_q)
         
         self.run_gradient_update_step(self.actor, actor_loss)
 

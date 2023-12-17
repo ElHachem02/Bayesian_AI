@@ -15,6 +15,7 @@ import random
 from collections import deque
 from gym.wrappers.rescale_action import RescaleAction
 from gym.wrappers.time_limit import TimeLimit
+random.seed(39)
 
 class CustomPendulum(PendulumEnv):
     def __init__(self, g: float = 10.0, eps: float = 0.0, *args, **kwargs):
